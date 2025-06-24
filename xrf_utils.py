@@ -66,8 +66,6 @@ def compute_self_absorption_correction(mu_mix, density, thickness_cm, angle_deg=
 
 from collections import defaultdict
 import numpy as np
-import xraylib
-from .xrf_core import get_line_code_and_shell  # adapt if needed
 
 def quantify_without_self_absorption(energies, counts, energy_primary, primary_counts, elements, line_selection):
     result = defaultdict(float)
@@ -100,9 +98,6 @@ def quantify_without_self_absorption(energies, counts, energy_primary, primary_c
 
 from math import radians, cos
 from collections import defaultdict
-import numpy as np
-import xraylib
-from .xrf_core import get_line_code_and_shell, compute_mu_mix, compute_self_absorption_correction  # adjust if needed
 
 def quantify_with_self_absorption(energies, counts, energy_primary, primary_counts, elements, line_selection, initial_composition, density, thickness_nm, angle_deg):
     result = defaultdict(float)
@@ -139,3 +134,30 @@ def quantify_with_self_absorption(energies, counts, energy_primary, primary_coun
     total = sum(result.values())
     return {el: 100 * val / total for el, val in result.items()}
 
+
+from math import radians, cos, exp
+
+def get_line_code_and_shell(label):
+    label_map = {
+        "Kα1": (xraylib.KA1_LINE, xraylib.K_SHELL),
+        "Kβ1": (xraylib.KB1_LINE, xraylib.K_SHELL),
+        "Lα1": (xraylib.LA1_LINE, xraylib.L3_SHELL),
+        "Lβ1": (xraylib.LB1_LINE, xraylib.L3_SHELL)
+    }
+    return label_map[label]
+
+def compute_mu_mix(composition, energy_keV):
+    """Compute mixture mass attenuation coefficient [cm²/g]"""
+    mu_mix = 0
+    for el, frac in composition.items():
+        Z = xraylib.SymbolToAtomicNumber(el)
+        mu = xraylib.CS_Total(Z, energy_keV)
+        mu_mix += frac * mu
+    return mu_mix
+
+def compute_self_absorption_correction(mu_mix, density, thickness_cm, angle_deg=45):
+    """Compute self-absorption correction factor C_reabs"""
+    theta = radians(angle_deg)
+    path = thickness_cm / cos(theta)
+    tau = mu_mix * density * path
+    return (1 - exp(-tau)) / tau if tau > 1e-6 else 1.0
